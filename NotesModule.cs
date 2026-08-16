@@ -15,9 +15,13 @@ namespace AinaLife.Notes;
 
 public class NotesConfig
 {
-    [DisplayName("自动纸条间隔（小时）")]
-    [Description("每隔多少小时自动生成一张温柔纸条，填 0 表示关闭自动纸条")]
-    public double AutoIntervalHours { get; set; } = 3;
+    [DisplayName("自动纸条最小间隔（小时）")]
+    [Description("自动纸条的最小间隔，与最大间隔构成随机范围，填 0 表示关闭自动纸条")]
+    public double AutoIntervalMinHours { get; set; } = 2;
+
+    [DisplayName("自动纸条最大间隔（小时）")]
+    [Description("自动纸条的最大间隔，与最小间隔构成随机范围，填 0 表示关闭自动纸条")]
+    public double AutoIntervalMaxHours { get; set; } = 5;
 
     [DisplayName("最大纸条数量")]
     [Description("纸条最多保留多少张，超出自动丢弃最旧的")]
@@ -47,6 +51,7 @@ public class NotesState
 {
     public List<NoteItem> Notes { get; set; } = new();
     public DateTime LastAutoTime { get; set; }
+    public DateTime NextAutoTime { get; set; }
 }
 
 [Module("温柔纸条",
@@ -128,6 +133,11 @@ public class NotesModule(
     {
         State = storageSystem.GetObject<NotesState>(StatePath, new NotesState()) ?? new NotesState();
 
+        //兼容旧状态：只有 LastAutoTime 时，按最大间隔推算下一次
+        if (State.NextAutoTime == default && State.LastAutoTime != default)
+            State.NextAutoTime = State.LastAutoTime.AddHours(
+                Configuration.AutoIntervalMaxHours > 0 ? Configuration.AutoIntervalMaxHours : 3);
+
         XmlHandler xmlHandler = new(this)
         {
             Description = "温柔纸条服务：可以留纸条、查看纸条、删除纸条，并支持自动生成温柔纸条（AI 自主生成内容，可渲染成手写便条图片发送）。",
@@ -142,19 +152,18 @@ public class NotesModule(
 
     protected override async Task OnUpdate()
     {
-        if (Configuration.AutoIntervalHours <= 0 || generating)
+        if (Configuration.AutoIntervalMaxHours <= 0 || generating)
             return;
 
         DateTime now = DateTime.Now;
-        TimeSpan interval = TimeSpan.FromHours(Configuration.AutoIntervalHours);
-        if (State.LastAutoTime != default && now - State.LastAutoTime < interval)
+        if (State.NextAutoTime != default && now < State.NextAutoTime)
             return;
 
         generating = true;
         try
         {
-            //先记录时间，防止生成过程中重复触发
-            State.LastAutoTime = now;
+            //先随机出下一次时间，防止生成过程中重复触发
+            State.NextAutoTime = RollNextTime(now);
             SaveState();
 
             string prompt =
@@ -371,6 +380,21 @@ public class NotesModule(
                 return typeface;
         }
         return SKTypeface.Default;
+    }
+
+    /// <summary>在配置的随机间隔范围内掷出下一次触发时间</summary>
+    private DateTime RollNextTime(DateTime now)
+    {
+        double min = Configuration.AutoIntervalMinHours;
+        double max = Configuration.AutoIntervalMaxHours;
+        if (max <= 0)
+            return DateTime.MaxValue;
+        if (min <= 0)
+            min = 0.5;
+        if (min > max)
+            min = max;
+        double hours = min + Random.Shared.NextDouble() * (max - min);
+        return now.AddHours(hours);
     }
 
     private void TrimNotes()
