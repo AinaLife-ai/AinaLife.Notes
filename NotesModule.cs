@@ -281,11 +281,10 @@ public class NotesModule(
             using SKPaint titlePaint = new()
             {
                 Color = new SKColor(0x8A, 0x6D, 0x6D),
-                TextSize = 26,
-                IsAntialias = true,
-                Typeface = GetTypeface()
+                IsAntialias = true
             };
-            canvas.DrawText(isAuto ? "温柔小纸条" : "小纸条", 60, 62, titlePaint);
+            using SKFont titleFont = new(GetTypeface(), 26);
+            canvas.DrawText(isAuto ? "温柔小纸条" : "小纸条", 60, 62, titleFont, titlePaint);
 
             //标题右侧小爱心
             using SKPaint heartPaint = new() { Color = new SKColor(0xE8, 0x5D, 0x75), Style = SKPaintStyle.Fill, IsAntialias = true };
@@ -296,19 +295,18 @@ public class NotesModule(
             using SKPaint textPaint = new()
             {
                 Color = new SKColor(0x44, 0x44, 0x44),
-                TextSize = 34,
-                IsAntialias = true,
-                Typeface = GetTypeface()
+                IsAntialias = true
             };
-            string[] lines = WrapText(content, textPaint, width - 150);
+            using SKFont textFont = new(GetTypeface(), 34);
+            string[] lines = WrapText(content, textFont, width - 150);
             float textY = 152;
             foreach (string line in lines.Take(4))
             {
-                canvas.DrawText(line, 70, textY, textPaint);
+                canvas.DrawText(line, 70, textY, textFont, textPaint);
                 textY += 46;
             }
             if (lines.Length > 4)
-                canvas.DrawText("……", 70, textY, textPaint);
+                canvas.DrawText("……", 70, textY, textFont, textPaint);
 
             //右下角大爱心
             using (SKPath bigHeart = CreateHeartPath(width - 80, 96, 52))
@@ -321,11 +319,10 @@ public class NotesModule(
             using SKPaint signPaint = new()
             {
                 Color = new SKColor(0x3A, 0x6E, 0xC8),
-                TextSize = 22,
-                IsAntialias = true,
-                Typeface = GetTypeface()
+                IsAntialias = true
             };
-            canvas.DrawText($"—— {signature}", width - 150 - signPaint.MeasureText(signature), height - 32, signPaint);
+            using SKFont signFont = new(GetTypeface(), 22);
+            canvas.DrawText($"—— {signature}", width - 150 - signFont.MeasureText(signature), height - 32, signFont, signPaint);
         }
 
         using SKImage image = SKImage.FromBitmap(bitmap);
@@ -336,14 +333,14 @@ public class NotesModule(
     }
 
     /// <summary>按画布宽度逐字换行</summary>
-    private static string[] WrapText(string text, SKPaint paint, float maxWidth)
+    private static string[] WrapText(string text, SKFont font, float maxWidth)
     {
         List<string> lines = new();
         string current = "";
         foreach (char c in text)
         {
             string test = current + c;
-            if (paint.MeasureText(test) > maxWidth && current.Length > 0)
+            if (font.MeasureText(test) > maxWidth && current.Length > 0)
             {
                 lines.Add(current);
                 current = c.ToString();
