@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,7 +13,6 @@ using Alife.Framework;
 using Alife.Function.FunctionCaller;
 using Alife.Function.QChat;
 using Microsoft.Extensions.Logging;
-using SkiaSharp;
 
 namespace AinaLife.Notes;
 
@@ -245,102 +248,78 @@ public class NotesModule(
 
         const int width = 720;
         const int height = 480;
-        using SKBitmap bitmap = new(width, height);
-        using (SKCanvas canvas = new(bitmap))
+        using Bitmap bitmap = new(width, height);
+        using (Graphics g = Graphics.FromImage(bitmap))
         {
-            //纸张底色
-            canvas.Clear(new SKColor(0xFF, 0xFB, 0xF0));
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.AntiAlias;
+            g.Clear(Color.FromArgb(0xFF, 0xFB, 0xF0));
 
             //蓝色横线
-            using SKPaint linePaint = new()
-            {
-                Color = new SKColor(0x9E, 0xC5, 0xF5),
-                StrokeWidth = 2,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke
-            };
+            using Pen linePen = new(Color.FromArgb(0x9E, 0xC5, 0xF5), 2f);
             for (float y = 100; y < height - 30; y += 40)
-                canvas.DrawLine(34, y, width - 34, y, linePaint);
+                g.DrawLine(linePen, 34, y, width - 34, y);
 
             //左侧孔洞（白色填充 + 浅灰描边）
-            using SKPaint holeFill = new() { Color = SKColors.White, Style = SKPaintStyle.Fill };
-            using SKPaint holeEdge = new()
-            {
-                Color = new SKColor(0xD0, 0xD0, 0xD0),
-                StrokeWidth = 1.5f,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke
-            };
+            using Brush holeFill = Brushes.White;
+            using Pen holeEdge = new(Color.FromArgb(0xD0, 0xD0, 0xD0), 1.5f);
             for (float y = 120; y < height - 30; y += 40)
             {
-                canvas.DrawCircle(24, y, 7, holeFill);
-                canvas.DrawCircle(24, y, 7, holeEdge);
+                g.FillEllipse(holeFill, 24 - 7, y - 7, 14, 14);
+                g.DrawEllipse(holeEdge, 24 - 7, y - 7, 14, 14);
             }
 
             //标题
-            using SKPaint titlePaint = new()
-            {
-                Color = new SKColor(0x8A, 0x6D, 0x6D),
-                IsAntialias = true
-            };
-            using SKFont titleFont = new(GetTypeface(), 26);
-            canvas.DrawText(isAuto ? "温柔小纸条" : "小纸条", 60, 62, titleFont, titlePaint);
+            using Font titleFont = new(GetFontFamily(), 26f, FontStyle.Regular, GraphicsUnit.Pixel);
+            using Brush titleBrush = new SolidBrush(Color.FromArgb(0x8A, 0x6D, 0x6D));
+            g.DrawString(isAuto ? "温柔小纸条" : "小纸条", titleFont, titleBrush, 60, 30);
 
             //标题右侧小爱心
-            using SKPaint heartPaint = new() { Color = new SKColor(0xE8, 0x5D, 0x75), Style = SKPaintStyle.Fill, IsAntialias = true };
-            using (SKPath smallHeart = CreateHeartPath(190, 42, 26))
-                canvas.DrawPath(smallHeart, heartPaint);
+            using Brush heartBrush = new SolidBrush(Color.FromArgb(0xE8, 0x5D, 0x75));
+            using (GraphicsPath smallHeart = CreateHeartPath(190, 42, 26))
+                g.FillPath(heartBrush, smallHeart);
 
             //正文（自动换行，最多4行）
-            using SKPaint textPaint = new()
-            {
-                Color = new SKColor(0x44, 0x44, 0x44),
-                IsAntialias = true
-            };
-            using SKFont textFont = new(GetTypeface(), 34);
+            using Font textFont = new(GetFontFamily(), 34f, FontStyle.Regular, GraphicsUnit.Pixel);
+            using Brush textBrush = new SolidBrush(Color.FromArgb(0x44, 0x44, 0x44));
             string[] lines = WrapText(content, textFont, width - 150);
             float textY = 152;
             foreach (string line in lines.Take(4))
             {
-                canvas.DrawText(line, 70, textY, textFont, textPaint);
+                g.DrawString(line, textFont, textBrush, 70, textY);
                 textY += 46;
             }
             if (lines.Length > 4)
-                canvas.DrawText("……", 70, textY, textFont, textPaint);
+                g.DrawString("……", textFont, textBrush, 70, textY);
 
             //右下角大爱心
-            using (SKPath bigHeart = CreateHeartPath(width - 80, 96, 52))
-                canvas.DrawPath(bigHeart, heartPaint);
+            using (GraphicsPath bigHeart = CreateHeartPath(width - 80, 96, 52))
+                g.FillPath(heartBrush, bigHeart);
 
             //签名
             string signature = string.IsNullOrWhiteSpace(Configuration.Signature)
                 ? "爱奈丽"
                 : Configuration.Signature.Trim();
-            using SKPaint signPaint = new()
-            {
-                Color = new SKColor(0x3A, 0x6E, 0xC8),
-                IsAntialias = true
-            };
-            using SKFont signFont = new(GetTypeface(), 22);
-            canvas.DrawText($"—— {signature}", width - 150 - signFont.MeasureText(signature), height - 32, signFont, signPaint);
+            using Font signFont = new(GetFontFamily(), 22f, FontStyle.Regular, GraphicsUnit.Pixel);
+            using Brush signBrush = new SolidBrush(Color.FromArgb(0x3A, 0x6E, 0xC8));
+            string signText = $"—— {signature}";
+            SizeF signSize = g.MeasureString(signText, signFont);
+            g.DrawString(signText, signFont, signBrush, width - 150 - signSize.Width, height - 32);
         }
 
-        using SKImage image = SKImage.FromBitmap(bitmap);
-        using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
-        using FileStream stream = File.OpenWrite(file);
-        data.SaveTo(stream);
+        bitmap.Save(file, ImageFormat.Png);
         return file;
     }
 
     /// <summary>按画布宽度逐字换行</summary>
-    private static string[] WrapText(string text, SKFont font, float maxWidth)
+    private static string[] WrapText(string text, Font font, float maxWidth)
     {
         List<string> lines = new();
         string current = "";
         foreach (char c in text)
         {
             string test = current + c;
-            if (font.MeasureText(test) > maxWidth && current.Length > 0)
+            if (font.Size > 0 && MeasureText(test, font) > maxWidth && current.Length > 0)
             {
                 lines.Add(current);
                 current = c.ToString();
@@ -355,28 +334,43 @@ public class NotesModule(
         return lines.Count == 0 ? new[] { text } : lines.ToArray();
     }
 
-    /// <summary>标准贝塞尔心形路径</summary>
-    private static SKPath CreateHeartPath(float cx, float cy, float size)
+    /// <summary>测量文本宽度（Graphics 实例不可跨调用持有，用静态位图测量）</summary>
+    private static float MeasureText(string text, Font font)
     {
-        SKPath path = new();
-        path.MoveTo(cx, cy + size * 0.35f);
-        path.CubicTo(cx - size * 0.6f, cy - size * 0.1f, cx - size * 0.5f, cy - size * 0.5f, cx, cy - size * 0.25f);
-        path.CubicTo(cx + size * 0.5f, cy - size * 0.5f, cx + size * 0.6f, cy - size * 0.1f, cx, cy + size * 0.35f);
-        path.Close();
+        using Bitmap bmp = new(1, 1);
+        using Graphics g = Graphics.FromImage(bmp);
+        return g.MeasureString(text, font).Width;
+    }
+
+    /// <summary>标准贝塞尔心形路径</summary>
+    private static GraphicsPath CreateHeartPath(float cx, float cy, float size)
+    {
+        GraphicsPath path = new();
+        path.AddBezier(cx - size * 0.6f, cy - size * 0.1f, cx - size * 0.5f, cy - size * 0.5f, cx, cy - size * 0.25f, cx, cy + size * 0.35f);
+        path.AddBezier(cx, cy + size * 0.35f, cx + size * 0.5f, cy - size * 0.5f, cx + size * 0.6f, cy - size * 0.1f, cx, cy + size * 0.35f);
+        path.CloseFigure();
         return path;
     }
 
     /// <summary>优先使用手写感的中文字体</summary>
-    private static SKTypeface GetTypeface()
+    private static FontFamily GetFontFamily()
     {
         string[] candidates = { "KaiTi", "楷体", "STKaiti", "FangSong", "SimSun", "Microsoft YaHei" };
         foreach (string name in candidates)
         {
-            SKTypeface typeface = SKTypeface.FromFamilyName(name);
-            if (typeface.FamilyName.Contains(name, StringComparison.OrdinalIgnoreCase))
-                return typeface;
+            try
+            {
+                FontFamily family = new(name);
+                if (family.IsStyleAvailable(FontStyle.Regular))
+                    return family;
+                family.Dispose();
+            }
+            catch
+            {
+                //字体不存在，尝试下一个
+            }
         }
-        return SKTypeface.Default;
+        return FontFamily.GenericSansSerif;
     }
 
     /// <summary>在配置的随机间隔范围内掷出下一次触发时间</summary>
